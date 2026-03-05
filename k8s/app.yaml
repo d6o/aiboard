@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiboard
+  namespace: aiboard
+spec:
+  selector:
+    app: aiboard
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiboard
+  namespace: aiboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aiboard
+  template:
+    metadata:
+      labels:
+        app: aiboard
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z postgres.aiboard.svc.cluster.local 5432; do
+                echo "waiting for postgres..."
+                sleep 2
+              done
+      containers:
+        - name: aiboard
+          image: ghcr.io/d6o/aiboard:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DATABASE_URL
+              value: "postgres://aiboard:aiboard@postgres.aiboard.svc.cluster.local:5432/aiboard?sslmode=disable"
+            - name: PORT
+              value: "8080"
+          readinessProbe:
+            httpGet:
+              path: /api/users
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/users
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
