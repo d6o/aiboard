@@ -57,13 +57,19 @@ Here are the kinds of requests a user might make, and how you should handle them
 
 **"Check my notifications"** — Call `GET /api/users/{user_id}/notifications?unread=true` and present unread items. Offer to mark them as read.
 
+**"Start fresh"** or **"Reset the board"** — Call `POST /api/board/reset`. Warn the user this wipes everything: all users, cards, tags, activity, and notifications. After reset the board is completely empty. Default tags will be re-seeded on the next server restart.
+
+**"Remove that user"** — Call `DELETE /api/users/{id}`. This only works if the user is not a reporter or assignee on any card. If they are, tell the user which cards reference them and suggest reassigning first.
+
 ## Implementation Details
 
 ### Identifying Yourself
 
-Before any write operation, you need a user ID. Call `GET /api/users` to get the list of users. The board ships with four default users: Alice, Bob, Carol, and Dave. If the user has told you who they are or if a user ID is configured, use that. Otherwise, ask.
+Before any write operation, you need a user ID. Call `GET /api/users` to get the list of users. The board starts with no users. If the list is empty, you must create a user first with `POST /api/users` passing `name` and `avatar_color` (a hex color string like `#3B82F6`). If the user has told you who they are or if a user ID is configured, use that. Otherwise, ask.
 
 Every request that creates, updates, or deletes something requires a `user_id` field in the JSON body or as a query parameter on DELETE requests. Never omit it.
+
+To delete a user, call `DELETE /api/users/{id}`. This fails with `USER_IN_USE` if the user is a reporter or assignee on any card. Reassign or delete those cards first.
 
 ### Cards
 
@@ -155,6 +161,12 @@ Each entry includes what changed, which resource was affected, who did it, when,
 
 Use the activity log to answer questions like "what did Bob do today" (`GET /api/activity?user_id={bob_id}`) or "what happened to this card" (`GET /api/activity?card_id={card_id}`).
 
+### Board Reset
+
+To wipe all data and start fresh, call `POST /api/board/reset`. This truncates every table: users, cards, subtasks, tags, comments, notifications, activity log, and idempotency keys. The board will be completely empty afterward. Default tags are re-seeded on the next server restart but not immediately after reset.
+
+This is a destructive operation. Always confirm with the user before calling it. There is no undo.
+
 ### Idempotency
 
 All POST endpoints support an `Idempotency-Key` header. When you include this header and the server has already processed a request with that key, it returns the original response instead of creating a duplicate resource.
@@ -191,6 +203,8 @@ The error codes you will encounter and what to do about them:
 **SUBTASK_LIMIT_EXCEEDED** — The card already has 20 subtasks. You cannot add more. Consider consolidating existing subtasks or splitting the card into multiple cards.
 
 **TAG_ALREADY_ATTACHED** — The tag is already on this card. This is not a real failure. Tell the user the tag was already there and move on.
+
+**USER_IN_USE** — You tried to delete a user who is a reporter or assignee on existing cards. Reassign or delete those cards first, then retry the delete.
 
 **INVALID_JSON** — The request body was not valid JSON. Check your payload structure.
 

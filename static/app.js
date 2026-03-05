@@ -37,10 +37,32 @@
     async function init() {
         users = await api("GET", "/users");
         tags = await api("GET", "/tags");
+        if (users.length === 0) {
+            showCreateUserPrompt();
+            return;
+        }
         populateUserSelectors();
         await loadBoard();
         pollNotifications();
         setInterval(pollNotifications, 30000);
+    }
+
+    function showCreateUserPrompt() {
+        const name = prompt("No users found. Enter your name to get started:");
+        if (!name || !name.trim()) {
+            showError("A user is required to use the board.");
+            setTimeout(showCreateUserPrompt, 500);
+            return;
+        }
+        const colors = ["#EF4444", "#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#06B6D4"];
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        api("POST", "/users", { name: name.trim(), avatar_color: color }).then((user) => {
+            users = [user];
+            populateUserSelectors();
+            loadBoard();
+            pollNotifications();
+            setInterval(pollNotifications, 30000);
+        });
     }
 
     function populateUserSelectors() {

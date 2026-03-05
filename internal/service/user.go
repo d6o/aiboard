@@ -6,18 +6,19 @@ import (
 	"github.com/d6o/aiboard/internal/model"
 )
 
-type userFinder interface {
+type userStore interface {
 	FindAll() ([]model.User, error)
 	FindByID(id string) (model.User, error)
 	FindByName(name string) (model.User, error)
 	Create(name, avatarColor string) (model.User, error)
+	Delete(id string) error
 }
 
 type UserService struct {
-	users userFinder
+	users userStore
 }
 
-func NewUserService(users userFinder) *UserService {
+func NewUserService(users userStore) *UserService {
 	return &UserService{users: users}
 }
 
@@ -51,4 +52,8 @@ func (s *UserService) Create(name, avatarColor string) (model.User, error) {
 	}
 
 	return s.users.Create(name, avatarColor)
+}
+
+func (s *UserService) Delete(id string) error {
+	return s.users.Delete(id)
 }

@@ -67,6 +67,11 @@ func (rw responseWriter) HandleError(w http.ResponseWriter, err error) {
 		return
 	}
 
+	if errors.Is(err, model.ErrUserInUse) {
+		rw.Error(w, http.StatusConflict, "USER_IN_USE", "user is referenced by existing cards and cannot be deleted", nil)
+		return
+	}
+
 	rw.Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "an internal error occurred", nil)
 }
 

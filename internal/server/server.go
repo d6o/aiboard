@@ -21,6 +21,7 @@ func NewServer(db *sql.DB) *Server {
 	commentStore := store.NewCommentStore(db)
 	notifStore := store.NewNotificationStore(db)
 	activityStore := store.NewActivityStore(db)
+	boardStore := store.NewBoardStore(db)
 	idempotencyStore := store.NewIdempotencyStore(db)
 
 	userSvc := service.NewUserService(userStore)
@@ -30,6 +31,7 @@ func NewServer(db *sql.DB) *Server {
 	commentSvc := service.NewCommentService(commentStore, userStore, notifStore, cardStore, activityStore)
 	notifSvc := service.NewNotificationService(notifStore)
 	activitySvc := service.NewActivityService(activityStore)
+	boardSvc := service.NewBoardService(boardStore)
 
 	userH := handler.NewUserHandler(userSvc)
 	cardH := handler.NewCardHandler(cardSvc)
@@ -38,6 +40,7 @@ func NewServer(db *sql.DB) *Server {
 	commentH := handler.NewCommentHandler(commentSvc)
 	notifH := handler.NewNotificationHandler(notifSvc)
 	activityH := handler.NewActivityHandler(activitySvc)
+	boardH := handler.NewBoardHandler(boardSvc)
 	idempotency := handler.NewIdempotencyMiddleware(idempotencyStore)
 
 	mux := http.NewServeMux()
@@ -46,6 +49,7 @@ func NewServer(db *sql.DB) *Server {
 	mux.HandleFunc("GET /api/users", userH.List)
 	mux.HandleFunc("GET /api/users/{id}", userH.Get)
 	mux.HandleFunc("POST /api/users", idempotency.Wrap(userH.Create))
+	mux.HandleFunc("DELETE /api/users/{id}", userH.Delete)
 
 	// Cards
 	mux.HandleFunc("GET /api/cards", cardH.List)
@@ -81,6 +85,9 @@ func NewServer(db *sql.DB) *Server {
 
 	// Activity log
 	mux.HandleFunc("GET /api/activity", activityH.List)
+
+	// Board management
+	mux.HandleFunc("POST /api/board/reset", boardH.Reset)
 
 	// Static files
 	mux.Handle("GET /", http.FileServer(http.Dir("static")))

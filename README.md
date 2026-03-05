@@ -53,6 +53,7 @@ All endpoints return JSON with this structure:
 | GET | `/api/users` | List all users |
 | GET | `/api/users/{id}` | Get a user |
 | POST | `/api/users` | Create a user |
+| DELETE | `/api/users/{id}` | Delete a user (fails if user is reporter/assignee on any card) |
 
 ### Cards
 
@@ -106,6 +107,12 @@ All endpoints return JSON with this structure:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/activity` | List activity (filter: `card_id`, `user_id`, `action`) |
+
+### Board Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/board/reset` | Wipe all data (users, cards, tags, everything) for a fresh start |
 
 ## API Examples
 
@@ -261,8 +268,8 @@ Each layer depends on the one below it through interfaces defined at the consume
 
 ## Seed Data
 
-On first run, the database is populated with:
+On first run, the database is populated with default **tags**: bug, feature, enhancement, urgent, design, backend, frontend (each with a distinct color).
 
-**Users:** Alice, Bob, Carol, Dave (each with a distinct avatar color)
+No default users are created. Create users through the API or the UI before using the board.
 
-**Tags:** bug, feature, enhancement, urgent, design, backend, frontend (each with a distinct color)
+To start completely fresh at any time, call `POST /api/board/reset`. This wipes all data including users, cards, tags, and activity. Default tags are re-seeded on the next server restart.

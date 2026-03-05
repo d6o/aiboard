@@ -10,6 +10,7 @@ type userService interface {
 	List() ([]model.User, error)
 	Get(id string) (model.User, error)
 	Create(name, avatarColor string) (model.User, error)
+	Delete(id string) error
 }
 
 type UserHandler struct {
@@ -58,4 +59,12 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.rw.JSON(w, http.StatusCreated, user)
+}
+
+func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	if err := h.svc.Delete(r.PathValue("id")); err != nil {
+		h.rw.HandleError(w, err)
+		return
+	}
+	h.rw.JSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

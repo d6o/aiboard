@@ -8,6 +8,7 @@ var (
 	ErrSubtaskLimit         = errors.New("card cannot have more than 20 subtasks")
 	ErrDuplicateName        = errors.New("name already exists")
 	ErrTagAlreadyAttached   = errors.New("tag is already attached to this card")
+	ErrUserInUse            = errors.New("user is referenced by existing cards")
 )
 
 type FieldError struct {

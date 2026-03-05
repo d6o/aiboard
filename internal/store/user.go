@@ -55,6 +55,49 @@ func (s *UserStore) FindByName(name string) (model.User, error) {
 	return u, err
 }
 
+func (s *UserStore) Delete(id string) error {
+	var cardCount int
+	err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM cards WHERE reporter_id = $1 OR assignee_id = $1`, id,
+	).Scan(&cardCount)
+	if err != nil {
+		return err
+	}
+	if cardCount > 0 {
+		return model.ErrUserInUse
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, stmt := range []string{
+		`DELETE FROM notifications WHERE user_id = $1`,
+		`DELETE FROM activity_log WHERE user_id = $1`,
+		`DELETE FROM comments WHERE user_id = $1`,
+	} {
+		if _, err := tx.Exec(stmt, id); err != nil {
+			return err
+		}
+	}
+
+	result, err := tx.Exec(`DELETE FROM users WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return model.ErrNotFound
+	}
+
+	return tx.Commit()
+}
+
 func (s *UserStore) Create(name, avatarColor string) (model.User, error) {
 	var u model.User
 	err := s.db.QueryRow(
