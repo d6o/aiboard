@@ -24,18 +24,24 @@ type fileActivityLogger interface {
 	Create(action, resourceType, resourceID, userID, details, cardID string) (model.ActivityEntry, error)
 }
 
+type fileCommentCreator interface {
+	Create(cardID, userID, content string) (model.Comment, error)
+}
+
 type FileService struct {
 	files    fileStore
 	cards    fileCardFinder
 	activity fileActivityLogger
+	comments fileCommentCreator
 	dir      string
 }
 
-func NewFileService(files fileStore, cards fileCardFinder, activity fileActivityLogger, uploadDir string) *FileService {
+func NewFileService(files fileStore, cards fileCardFinder, activity fileActivityLogger, comments fileCommentCreator, uploadDir string) *FileService {
 	return &FileService{
 		files:    files,
 		cards:    cards,
 		activity: activity,
+		comments: comments,
 		dir:      uploadDir,
 	}
 }
@@ -94,6 +100,7 @@ func (s *FileService) Upload(cardID, filename, contentType string, size int64, b
 
 	f.RawURL = "/api/files/" + f.ID + "/raw"
 	s.activity.Create("uploaded", "file", f.ID, actingUserID, "file uploaded: "+filename, cardID)
+	s.comments.Create(cardID, actingUserID, "Uploaded file "+filename)
 	return f, nil
 }
 

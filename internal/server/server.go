@@ -30,7 +30,7 @@ func NewServer(db *sql.DB, uploadDir string) *Server {
 	commentSvc := service.NewCommentService(commentStore, userStore, notifStore, cardStore, activityStore)
 	notifSvc := service.NewNotificationService(notifStore)
 	activitySvc := service.NewActivityService(activityStore)
-	fileSvc := service.NewFileService(fileStore, cardStore, activityStore, uploadDir)
+	fileSvc := service.NewFileService(fileStore, cardStore, activityStore, commentStore, uploadDir)
 	boardSvc := service.NewBoardService(boardStore)
 
 	userH := handler.NewUserHandler(userSvc)
