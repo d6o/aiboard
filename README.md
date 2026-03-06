@@ -23,12 +23,12 @@ This builds the Go binary, starts PostgreSQL, runs migrations, seeds default use
 
 AIBoard is a three-column kanban board (**Todo**, **Doing**, **Done**) with:
 
-- **Cards** with title, description, priority (1-5), reporter, assignee, tags, subtasks, and comments
+- **Cards** with title, description, priority (1-5), reporter, assignee, tags, child cards, and comments
 - **Drag-and-drop** between columns
-- **Subtasks** with completion tracking and a 20-item limit per card
+- **Parent-child cards** — any card can have child cards (which are full cards themselves), enabling recursive task breakdown with different assignees per child. A parent card cannot move to Done until all children are Done.
 - **Tags** as reusable color-coded labels
 - **Comments** with @mention support and autocomplete
-- **Notifications** triggered by @mentions, subtask completion, and cards moved to Done
+- **Notifications** triggered by @mentions, all children completed, and cards moved to Done
 - **Activity log** recording every mutation for full auditability
 - **Idempotency** via `Idempotency-Key` header to prevent duplicate creates on retries
 
@@ -59,22 +59,12 @@ All endpoints return JSON with this structure:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/cards` | List cards (filter: `column`, `assignee_id`, `reporter_id`, `tag_id`, `priority`) |
-| GET | `/api/cards/{id}` | Get card with subtasks, comments, and tags |
+| GET | `/api/cards` | List cards (filter: `column`, `assignee_id`, `reporter_id`, `tag_id`, `priority`, `parent_id`) |
+| GET | `/api/cards/{id}` | Get card with children, comments, and tags |
 | POST | `/api/cards` | Create a card |
 | PUT | `/api/cards/{id}` | Update a card |
 | DELETE | `/api/cards/{id}` | Delete a card |
 | PATCH | `/api/cards/{id}/move` | Move card to a different column |
-
-### Subtasks
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/cards/{cardID}/subtasks` | List subtasks |
-| POST | `/api/cards/{cardID}/subtasks` | Create a subtask |
-| PUT | `/api/cards/{cardID}/subtasks/{id}` | Update a subtask (title, completed) |
-| DELETE | `/api/cards/{cardID}/subtasks/{id}` | Delete a subtask |
-| PATCH | `/api/cards/{cardID}/subtasks/reorder` | Reorder subtasks |
 
 ### Tags
 
@@ -128,6 +118,22 @@ curl -X POST http://localhost:8080/api/cards \
     "column": "todo",
     "reporter_id": "<user-id>",
     "assignee_id": "<user-id>",
+    "user_id": "<user-id>"
+  }'
+```
+
+**Create a child card (subtask):**
+
+```bash
+curl -X POST http://localhost:8080/api/cards \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Design login form mockup",
+    "priority": 2,
+    "column": "todo",
+    "reporter_id": "<user-id>",
+    "assignee_id": "<different-user-id>",
+    "parent_id": "<parent-card-id>",
     "user_id": "<user-id>"
   }'
 ```

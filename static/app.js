@@ -120,9 +120,9 @@
         const assignee = card.assignee || {};
         const initial = (assignee.name || "?")[0].toUpperCase();
 
-        let subtaskHTML = "";
-        if (card.subtask_total > 0) {
-            subtaskHTML = `<span class="subtask-indicator">\u2611 ${card.subtask_completed}/${card.subtask_total}</span>`;
+        let childHTML = "";
+        if (card.child_total > 0) {
+            childHTML = `<span class="subtask-indicator">\u2611 ${card.child_completed}/${card.child_total}</span>`;
         }
 
         el.innerHTML = `
@@ -131,7 +131,7 @@
             <div class="card-meta">
                 <div class="card-meta-left">
                     <span class="priority-badge priority-${card.priority}">P${card.priority}</span>
-                    ${subtaskHTML}
+                    ${childHTML}
                 </div>
                 <span class="avatar" style="background:${assignee.avatar_color || '#666'}" title="${escapeHTML(assignee.name || '')}">${initial}</span>
             </div>
@@ -209,7 +209,7 @@
         $("#card-detail-section").style.display = "block";
         $("#delete-card-btn").style.display = "inline-block";
         renderTags(card.tags || []);
-        renderSubtasks(card.subtasks || []);
+        renderChildren(card.children || [], card.child_total, card.child_completed);
         renderComments(card.comments || []);
         openModal();
     }
@@ -287,53 +287,44 @@
         await openCardDetail(editingCardID);
     });
 
-    // Subtasks
-    function renderSubtasks(subtasks) {
-        const container = $("#subtask-list");
+    // Children
+    function renderChildren(children, total, completed) {
+        const container = $("#children-list");
         container.innerHTML = "";
-        const done = subtasks.filter((s) => s.completed).length;
-        $("#subtask-progress").textContent = subtasks.length > 0 ? `(${done}/${subtasks.length})` : "";
+        $("#children-progress").textContent = total > 0 ? `(${completed}/${total})` : "";
 
-        for (const st of subtasks) {
+        for (const child of children) {
+            const assignee = child.assignee || {};
+            const initial = (assignee.name || "?")[0].toUpperCase();
             const item = document.createElement("div");
-            item.className = "subtask-item";
+            item.className = "subtask-item child-card-item";
+            item.style.cursor = "pointer";
+            const colLabel = child.column === "done" ? "\u2705" : child.column === "doing" ? "\uD83D\uDD35" : "\u26AA";
             item.innerHTML = `
-                <input type="checkbox" ${st.completed ? "checked" : ""} data-id="${st.id}" data-title="${escapeAttr(st.title)}">
-                <span class="subtask-title ${st.completed ? "completed" : ""}">${escapeHTML(st.title)}</span>
-                <span class="delete-subtask" data-id="${st.id}">&times;</span>
+                <span>${colLabel}</span>
+                <span class="subtask-title ${child.column === "done" ? "completed" : ""}">${escapeHTML(child.title)}</span>
+                <span class="avatar" style="background:${assignee.avatar_color || '#666'};width:20px;height:20px;font-size:10px" title="${escapeHTML(assignee.name || '')}">${initial}</span>
             `;
+            item.addEventListener("click", () => openCardDetail(child.id));
             container.appendChild(item);
         }
-
-        container.querySelectorAll("input[type=checkbox]").forEach((cb) => {
-            cb.addEventListener("change", async () => {
-                await api("PUT", `/cards/${editingCardID}/subtasks/${cb.dataset.id}`, {
-                    title: cb.dataset.title,
-                    completed: cb.checked,
-                    user_id: currentUserID,
-                });
-                await openCardDetail(editingCardID);
-            });
-        });
-
-        container.querySelectorAll(".delete-subtask").forEach((btn) => {
-            btn.addEventListener("click", async () => {
-                await api("DELETE", `/cards/${editingCardID}/subtasks/${btn.dataset.id}?user_id=${currentUserID}`);
-                await openCardDetail(editingCardID);
-            });
-        });
     }
 
-    $("#add-subtask-btn").addEventListener("click", async () => {
-        const input = $("#new-subtask-title");
-        const title = input.value.trim();
-        if (!title) return;
-        await api("POST", `/cards/${editingCardID}/subtasks`, {
-            title,
+    $("#add-child-btn").addEventListener("click", async () => {
+        const title = prompt("Child card title:");
+        if (!title || !title.trim()) return;
+        await api("POST", "/cards", {
+            title: title.trim(),
+            description: "",
+            priority: 3,
+            column: "todo",
+            reporter_id: currentUserID,
+            assignee_id: currentUserID,
+            parent_id: editingCardID,
             user_id: currentUserID,
         });
-        input.value = "";
         await openCardDetail(editingCardID);
+        await loadBoard();
     });
 
     // Comments
@@ -485,10 +476,6 @@
         const div = document.createElement("div");
         div.textContent = str || "";
         return div.innerHTML;
-    }
-
-    function escapeAttr(str) {
-        return (str || "").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
     }
 
     function formatTime(iso) {

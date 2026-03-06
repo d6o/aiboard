@@ -9,19 +9,18 @@ import (
 type cardStore interface {
 	FindAll(filter model.CardFilter) ([]model.Card, error)
 	FindByID(id string) (model.Card, error)
-	Create(title, description string, priority int, col model.Column, sortOrder int, reporterID, assigneeID string) (model.Card, error)
+	FindByParentID(parentID string) ([]model.Card, error)
+	Create(title, description string, priority int, col model.Column, sortOrder int, reporterID, assigneeID, parentID string) (model.Card, error)
 	Update(id, title, description string, priority int, col model.Column, sortOrder int, reporterID, assigneeID string) (model.Card, error)
 	UpdateColumn(id string, col model.Column) (model.Card, error)
 	Delete(id string) error
 	NextSortOrder(col model.Column) (int, error)
+	HasIncompleteChildren(id string) (bool, error)
+	AllChildrenDone(parentID string) (bool, error)
 }
 
 type cardTagFinder interface {
 	FindByCardID(cardID string) ([]model.Tag, error)
-}
-
-type cardSubtaskFinder interface {
-	FindByCardID(cardID string) ([]model.Subtask, error)
 }
 
 type cardCommentFinder interface {
@@ -39,17 +38,15 @@ type cardNotifier interface {
 type CardService struct {
 	cards    cardStore
 	tags     cardTagFinder
-	subtasks cardSubtaskFinder
 	comments cardCommentFinder
 	activity cardActivityLogger
 	notifs   cardNotifier
 }
 
-func NewCardService(cards cardStore, tags cardTagFinder, subtasks cardSubtaskFinder, comments cardCommentFinder, activity cardActivityLogger, notifs cardNotifier) *CardService {
+func NewCardService(cards cardStore, tags cardTagFinder, comments cardCommentFinder, activity cardActivityLogger, notifs cardNotifier) *CardService {
 	return &CardService{
 		cards:    cards,
 		tags:     tags,
-		subtasks: subtasks,
 		comments: comments,
 		activity: activity,
 		notifs:   notifs,
@@ -85,11 +82,11 @@ func (s *CardService) Get(id string) (model.Card, error) {
 	}
 	card.Tags = tags
 
-	subtasks, err := s.subtasks.FindByCardID(id)
+	children, err := s.cards.FindByParentID(id)
 	if err != nil {
 		return card, err
 	}
-	card.Subtasks = subtasks
+	card.Children = children
 
 	comments, err := s.comments.FindByCardID(id)
 	if err != nil {
@@ -100,9 +97,15 @@ func (s *CardService) Get(id string) (model.Card, error) {
 	return card, nil
 }
 
-func (s *CardService) Create(title, description string, priority int, col model.Column, reporterID, assigneeID, actingUserID string) (model.Card, error) {
+func (s *CardService) Create(title, description string, priority int, col model.Column, reporterID, assigneeID, parentID, actingUserID string) (model.Card, error) {
 	if err := validateCard(title, priority, col, reporterID, assigneeID); err != nil {
 		return model.Card{}, err
+	}
+
+	if parentID != "" {
+		if _, err := s.cards.FindByID(parentID); err != nil {
+			return model.Card{}, err
+		}
 	}
 
 	sortOrder, err := s.cards.NextSortOrder(col)
@@ -110,7 +113,7 @@ func (s *CardService) Create(title, description string, priority int, col model.
 		return model.Card{}, err
 	}
 
-	card, err := s.cards.Create(title, description, priority, col, sortOrder, reporterID, assigneeID)
+	card, err := s.cards.Create(title, description, priority, col, sortOrder, reporterID, assigneeID, parentID)
 	if err != nil {
 		return card, err
 	}
@@ -130,6 +133,12 @@ func (s *CardService) Update(id, title, description string, priority int, col mo
 		return model.Card{}, err
 	}
 
+	if oldCard.Column != model.ColumnDone && col == model.ColumnDone {
+		if err := s.checkChildrenDone(id); err != nil {
+			return model.Card{}, err
+		}
+	}
+
 	card, err := s.cards.Update(id, title, description, priority, col, sortOrder, reporterID, assigneeID)
 	if err != nil {
 		return card, err
@@ -138,7 +147,7 @@ func (s *CardService) Update(id, title, description string, priority int, col mo
 	s.activity.Create("updated", "card", card.ID, actingUserID, "card updated", card.ID)
 
 	if oldCard.Column != model.ColumnDone && col == model.ColumnDone {
-		s.notifs.Create(card.ReporterID, "Card \""+card.Title+"\" was moved to Done", card.ID)
+		s.notifyDone(card)
 	}
 
 	return s.cards.FindByID(card.ID)
@@ -156,6 +165,12 @@ func (s *CardService) Move(id string, col model.Column, actingUserID string) (mo
 		return model.Card{}, err
 	}
 
+	if oldCard.Column != model.ColumnDone && col == model.ColumnDone {
+		if err := s.checkChildrenDone(id); err != nil {
+			return model.Card{}, err
+		}
+	}
+
 	card, err := s.cards.UpdateColumn(id, col)
 	if err != nil {
 		return card, err
@@ -165,7 +180,7 @@ func (s *CardService) Move(id string, col model.Column, actingUserID string) (mo
 	s.activity.Create("moved", "card", card.ID, actingUserID, details, card.ID)
 
 	if oldCard.Column != model.ColumnDone && col == model.ColumnDone {
-		s.notifs.Create(card.ReporterID, "Card \""+card.Title+"\" was moved to Done", card.ID)
+		s.notifyDone(card)
 	}
 
 	return s.cards.FindByID(card.ID)
@@ -183,6 +198,35 @@ func (s *CardService) Delete(id, actingUserID string) error {
 
 	s.activity.Create("deleted", "card", id, actingUserID, "card deleted", "")
 	return nil
+}
+
+func (s *CardService) checkChildrenDone(cardID string) error {
+	hasIncomplete, err := s.cards.HasIncompleteChildren(cardID)
+	if err != nil {
+		return err
+	}
+	if hasIncomplete {
+		return model.ErrChildrenNotDone
+	}
+	return nil
+}
+
+func (s *CardService) notifyDone(card model.Card) {
+	s.notifs.Create(card.ReporterID, "Card \""+card.Title+"\" was moved to Done", card.ID)
+
+	if card.ParentID != "" {
+		allDone, err := s.cards.AllChildrenDone(card.ParentID)
+		if err != nil {
+			return
+		}
+		if allDone {
+			parent, err := s.cards.FindByID(card.ParentID)
+			if err != nil {
+				return
+			}
+			s.notifs.Create(parent.AssigneeID, "All child cards completed on \""+parent.Title+"\"", parent.ID)
+		}
+	}
 }
 
 func validateCard(title string, priority int, col model.Column, reporterID, assigneeID string) error {

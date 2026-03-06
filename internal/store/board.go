@@ -17,7 +17,6 @@ func (s *BoardStore) Reset() error {
 		notifications,
 		comments,
 		card_tags,
-		subtasks,
 		cards,
 		tags,
 		users

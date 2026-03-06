@@ -52,16 +52,6 @@ func (rw responseWriter) HandleError(w http.ResponseWriter, err error) {
 		return
 	}
 
-	if errors.Is(err, model.ErrDuplicateSubtaskName) {
-		rw.Error(w, http.StatusConflict, "DUPLICATE_SUBTASK_TITLE", "duplicate subtask title within card", nil)
-		return
-	}
-
-	if errors.Is(err, model.ErrSubtaskLimit) {
-		rw.Error(w, http.StatusBadRequest, "SUBTASK_LIMIT_EXCEEDED", "card cannot have more than 20 subtasks", nil)
-		return
-	}
-
 	if errors.Is(err, model.ErrTagAlreadyAttached) {
 		rw.Error(w, http.StatusConflict, "TAG_ALREADY_ATTACHED", "tag is already attached to this card", nil)
 		return
@@ -69,6 +59,11 @@ func (rw responseWriter) HandleError(w http.ResponseWriter, err error) {
 
 	if errors.Is(err, model.ErrUserInUse) {
 		rw.Error(w, http.StatusConflict, "USER_IN_USE", "user is referenced by existing cards and cannot be deleted", nil)
+		return
+	}
+
+	if errors.Is(err, model.ErrChildrenNotDone) {
+		rw.Error(w, http.StatusConflict, "CHILDREN_NOT_DONE", "all child cards must be in done before this card can move to done", nil)
 		return
 	}
 

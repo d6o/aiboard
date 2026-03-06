@@ -3,12 +3,11 @@ package model
 import "errors"
 
 var (
-	ErrNotFound             = errors.New("resource not found")
-	ErrDuplicateSubtaskName = errors.New("duplicate subtask title within card")
-	ErrSubtaskLimit         = errors.New("card cannot have more than 20 subtasks")
-	ErrDuplicateName        = errors.New("name already exists")
-	ErrTagAlreadyAttached   = errors.New("tag is already attached to this card")
-	ErrUserInUse            = errors.New("user is referenced by existing cards")
+	ErrNotFound           = errors.New("resource not found")
+	ErrDuplicateName      = errors.New("name already exists")
+	ErrTagAlreadyAttached = errors.New("tag is already attached to this card")
+	ErrUserInUse          = errors.New("user is referenced by existing cards")
+	ErrChildrenNotDone    = errors.New("all child cards must be in done before this card can move to done")
 )
 
 type FieldError struct {

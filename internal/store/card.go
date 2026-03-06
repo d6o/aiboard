@@ -19,11 +19,11 @@ func NewCardStore(db *sql.DB) *CardStore {
 
 func (s *CardStore) FindAll(filter model.CardFilter) ([]model.Card, error) {
 	query := `SELECT c.id, c.title, c.description, c.priority, c.column_name, c.sort_order,
-		c.reporter_id, c.assignee_id, c.created_at, c.updated_at,
+		c.reporter_id, c.assignee_id, COALESCE(c.parent_id::text, ''), c.created_at, c.updated_at,
 		r.id, r.name, r.avatar_color, r.created_at, r.updated_at,
 		a.id, a.name, a.avatar_color, a.created_at, a.updated_at,
-		COALESCE((SELECT COUNT(*) FROM subtasks WHERE card_id = c.id), 0),
-		COALESCE((SELECT COUNT(*) FROM subtasks WHERE card_id = c.id AND completed = true), 0)
+		COALESCE((SELECT COUNT(*) FROM cards child WHERE child.parent_id = c.id), 0),
+		COALESCE((SELECT COUNT(*) FROM cards child WHERE child.parent_id = c.id AND child.column_name = 'done'), 0)
 		FROM cards c
 		JOIN users r ON c.reporter_id = r.id
 		JOIN users a ON c.assignee_id = a.id`
@@ -57,6 +57,11 @@ func (s *CardStore) FindAll(filter model.CardFilter) ([]model.Card, error) {
 		args = append(args, filter.Tag)
 		argIdx++
 	}
+	if filter.ParentID != "" {
+		conditions = append(conditions, fmt.Sprintf("c.parent_id = $%d", argIdx))
+		args = append(args, filter.ParentID)
+		argIdx++
+	}
 
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")
@@ -72,67 +77,86 @@ func (s *CardStore) FindAll(filter model.CardFilter) ([]model.Card, error) {
 
 	var cards []model.Card
 	for rows.Next() {
-		var c model.Card
-		var reporter model.User
-		var assignee model.User
-		if err := rows.Scan(
-			&c.ID, &c.Title, &c.Description, &c.Priority, &c.Column, &c.SortOrder,
-			&c.ReporterID, &c.AssigneeID, &c.CreatedAt, &c.UpdatedAt,
-			&reporter.ID, &reporter.Name, &reporter.AvatarColor, &reporter.CreatedAt, &reporter.UpdatedAt,
-			&assignee.ID, &assignee.Name, &assignee.AvatarColor, &assignee.CreatedAt, &assignee.UpdatedAt,
-			&c.SubtaskTotal, &c.SubtaskCompleted,
-		); err != nil {
+		c, err := s.scanCard(rows)
+		if err != nil {
 			return nil, err
 		}
-		c.Reporter = &reporter
-		c.Assignee = &assignee
 		cards = append(cards, c)
 	}
 	return cards, rows.Err()
 }
 
 func (s *CardStore) FindByID(id string) (model.Card, error) {
-	var c model.Card
-	var reporter model.User
-	var assignee model.User
-	err := s.db.QueryRow(
+	row := s.db.QueryRow(
 		`SELECT c.id, c.title, c.description, c.priority, c.column_name, c.sort_order,
-			c.reporter_id, c.assignee_id, c.created_at, c.updated_at,
+			c.reporter_id, c.assignee_id, COALESCE(c.parent_id::text, ''), c.created_at, c.updated_at,
 			r.id, r.name, r.avatar_color, r.created_at, r.updated_at,
 			a.id, a.name, a.avatar_color, a.created_at, a.updated_at,
-			COALESCE((SELECT COUNT(*) FROM subtasks WHERE card_id = c.id), 0),
-			COALESCE((SELECT COUNT(*) FROM subtasks WHERE card_id = c.id AND completed = true), 0)
+			COALESCE((SELECT COUNT(*) FROM cards child WHERE child.parent_id = c.id), 0),
+			COALESCE((SELECT COUNT(*) FROM cards child WHERE child.parent_id = c.id AND child.column_name = 'done'), 0)
 		FROM cards c
 		JOIN users r ON c.reporter_id = r.id
 		JOIN users a ON c.assignee_id = a.id
 		WHERE c.id = $1`, id,
-	).Scan(
-		&c.ID, &c.Title, &c.Description, &c.Priority, &c.Column, &c.SortOrder,
-		&c.ReporterID, &c.AssigneeID, &c.CreatedAt, &c.UpdatedAt,
-		&reporter.ID, &reporter.Name, &reporter.AvatarColor, &reporter.CreatedAt, &reporter.UpdatedAt,
-		&assignee.ID, &assignee.Name, &assignee.AvatarColor, &assignee.CreatedAt, &assignee.UpdatedAt,
-		&c.SubtaskTotal, &c.SubtaskCompleted,
 	)
+	c, err := s.scanCard(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return c, model.ErrNotFound
 	}
-	if err != nil {
-		return c, err
-	}
-	c.Reporter = &reporter
-	c.Assignee = &assignee
-	return c, nil
+	return c, err
 }
 
-func (s *CardStore) Create(title, description string, priority int, col model.Column, sortOrder int, reporterID, assigneeID string) (model.Card, error) {
+func (s *CardStore) FindByParentID(parentID string) ([]model.Card, error) {
+	rows, err := s.db.Query(
+		`SELECT c.id, c.title, c.description, c.priority, c.column_name, c.sort_order,
+			c.reporter_id, c.assignee_id, COALESCE(c.parent_id::text, ''), c.created_at, c.updated_at,
+			r.id, r.name, r.avatar_color, r.created_at, r.updated_at,
+			a.id, a.name, a.avatar_color, a.created_at, a.updated_at,
+			COALESCE((SELECT COUNT(*) FROM cards child WHERE child.parent_id = c.id), 0),
+			COALESCE((SELECT COUNT(*) FROM cards child WHERE child.parent_id = c.id AND child.column_name = 'done'), 0)
+		FROM cards c
+		JOIN users r ON c.reporter_id = r.id
+		JOIN users a ON c.assignee_id = a.id
+		WHERE c.parent_id = $1
+		ORDER BY c.sort_order, c.created_at`, parentID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var cards []model.Card
+	for rows.Next() {
+		c, err := s.scanCard(rows)
+		if err != nil {
+			return nil, err
+		}
+		cards = append(cards, c)
+	}
+	return cards, rows.Err()
+}
+
+func (s *CardStore) Create(title, description string, priority int, col model.Column, sortOrder int, reporterID, assigneeID, parentID string) (model.Card, error) {
 	var c model.Card
-	err := s.db.QueryRow(
-		`INSERT INTO cards (title, description, priority, column_name, sort_order, reporter_id, assignee_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
-		 RETURNING id, title, description, priority, column_name, sort_order, reporter_id, assignee_id, created_at, updated_at`,
-		title, description, priority, string(col), sortOrder, reporterID, assigneeID,
-	).Scan(&c.ID, &c.Title, &c.Description, &c.Priority, &c.Column, &c.SortOrder,
-		&c.ReporterID, &c.AssigneeID, &c.CreatedAt, &c.UpdatedAt)
+	var err error
+	if parentID == "" {
+		err = s.db.QueryRow(
+			`INSERT INTO cards (title, description, priority, column_name, sort_order, reporter_id, assignee_id)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7)
+			 RETURNING id, title, description, priority, column_name, sort_order, reporter_id, assignee_id, created_at, updated_at`,
+			title, description, priority, string(col), sortOrder, reporterID, assigneeID,
+		).Scan(&c.ID, &c.Title, &c.Description, &c.Priority, &c.Column, &c.SortOrder,
+			&c.ReporterID, &c.AssigneeID, &c.CreatedAt, &c.UpdatedAt)
+	} else {
+		err = s.db.QueryRow(
+			`INSERT INTO cards (title, description, priority, column_name, sort_order, reporter_id, assignee_id, parent_id)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			 RETURNING id, title, description, priority, column_name, sort_order, reporter_id, assignee_id, created_at, updated_at`,
+			title, description, priority, string(col), sortOrder, reporterID, assigneeID, parentID,
+		).Scan(&c.ID, &c.Title, &c.Description, &c.Priority, &c.Column, &c.SortOrder,
+			&c.ReporterID, &c.AssigneeID, &c.CreatedAt, &c.UpdatedAt)
+		c.ParentID = parentID
+	}
 	return c, err
 }
 
@@ -191,4 +215,51 @@ func (s *CardStore) NextSortOrder(col model.Column) (int, error) {
 		return int(maxOrder.Int64) + 1, nil
 	}
 	return 0, nil
+}
+
+func (s *CardStore) HasIncompleteChildren(id string) (bool, error) {
+	var count int
+	err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM cards WHERE parent_id = $1 AND column_name != 'done'`, id,
+	).Scan(&count)
+	return count > 0, err
+}
+
+func (s *CardStore) AllChildrenDone(parentID string) (bool, error) {
+	var total, done int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM cards WHERE parent_id = $1`, parentID).Scan(&total)
+	if err != nil {
+		return false, err
+	}
+	if total == 0 {
+		return false, nil
+	}
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM cards WHERE parent_id = $1 AND column_name = 'done'`, parentID).Scan(&done)
+	if err != nil {
+		return false, err
+	}
+	return total == done, nil
+}
+
+type scanner interface {
+	Scan(dest ...any) error
+}
+
+func (s *CardStore) scanCard(row scanner) (model.Card, error) {
+	var c model.Card
+	var reporter model.User
+	var assignee model.User
+	err := row.Scan(
+		&c.ID, &c.Title, &c.Description, &c.Priority, &c.Column, &c.SortOrder,
+		&c.ReporterID, &c.AssigneeID, &c.ParentID, &c.CreatedAt, &c.UpdatedAt,
+		&reporter.ID, &reporter.Name, &reporter.AvatarColor, &reporter.CreatedAt, &reporter.UpdatedAt,
+		&assignee.ID, &assignee.Name, &assignee.AvatarColor, &assignee.CreatedAt, &assignee.UpdatedAt,
+		&c.ChildTotal, &c.ChildCompleted,
+	)
+	if err != nil {
+		return c, err
+	}
+	c.Reporter = &reporter
+	c.Assignee = &assignee
+	return c, nil
 }

@@ -16,7 +16,6 @@ type Server struct {
 func NewServer(db *sql.DB) *Server {
 	userStore := store.NewUserStore(db)
 	cardStore := store.NewCardStore(db)
-	subtaskStore := store.NewSubtaskStore(db)
 	tagStore := store.NewTagStore(db)
 	commentStore := store.NewCommentStore(db)
 	notifStore := store.NewNotificationStore(db)
@@ -25,8 +24,7 @@ func NewServer(db *sql.DB) *Server {
 	idempotencyStore := store.NewIdempotencyStore(db)
 
 	userSvc := service.NewUserService(userStore)
-	cardSvc := service.NewCardService(cardStore, tagStore, subtaskStore, commentStore, activityStore, notifStore)
-	subtaskSvc := service.NewSubtaskService(subtaskStore, cardStore, activityStore, notifStore)
+	cardSvc := service.NewCardService(cardStore, tagStore, commentStore, activityStore, notifStore)
 	tagSvc := service.NewTagService(tagStore, activityStore)
 	commentSvc := service.NewCommentService(commentStore, userStore, notifStore, cardStore, activityStore)
 	notifSvc := service.NewNotificationService(notifStore)
@@ -35,7 +33,6 @@ func NewServer(db *sql.DB) *Server {
 
 	userH := handler.NewUserHandler(userSvc)
 	cardH := handler.NewCardHandler(cardSvc)
-	subtaskH := handler.NewSubtaskHandler(subtaskSvc)
 	tagH := handler.NewTagHandler(tagSvc)
 	commentH := handler.NewCommentHandler(commentSvc)
 	notifH := handler.NewNotificationHandler(notifSvc)
@@ -58,13 +55,6 @@ func NewServer(db *sql.DB) *Server {
 	mux.HandleFunc("PUT /api/cards/{id}", cardH.Update)
 	mux.HandleFunc("DELETE /api/cards/{id}", cardH.Delete)
 	mux.HandleFunc("PATCH /api/cards/{id}/move", cardH.Move)
-
-	// Subtasks
-	mux.HandleFunc("GET /api/cards/{cardID}/subtasks", subtaskH.List)
-	mux.HandleFunc("POST /api/cards/{cardID}/subtasks", idempotency.Wrap(subtaskH.Create))
-	mux.HandleFunc("PUT /api/cards/{cardID}/subtasks/{id}", subtaskH.Update)
-	mux.HandleFunc("DELETE /api/cards/{cardID}/subtasks/{id}", subtaskH.Delete)
-	mux.HandleFunc("PATCH /api/cards/{cardID}/subtasks/reorder", subtaskH.Reorder)
 
 	// Tags
 	mux.HandleFunc("GET /api/tags", tagH.List)

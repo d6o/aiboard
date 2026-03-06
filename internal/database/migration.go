@@ -28,15 +28,7 @@ func (m *Migrator) Run() error {
 			sort_order INTEGER NOT NULL DEFAULT 0,
 			reporter_id UUID NOT NULL REFERENCES users(id),
 			assignee_id UUID NOT NULL REFERENCES users(id),
-			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		)`,
-		`CREATE TABLE IF NOT EXISTS subtasks (
-			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			card_id UUID NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
-			title TEXT NOT NULL,
-			completed BOOLEAN NOT NULL DEFAULT FALSE,
-			sort_order INTEGER NOT NULL DEFAULT 0,
+			parent_id UUID REFERENCES cards(id) ON DELETE CASCADE,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
@@ -85,7 +77,7 @@ func (m *Migrator) Run() error {
 		`CREATE INDEX IF NOT EXISTS idx_cards_column ON cards(column_name)`,
 		`CREATE INDEX IF NOT EXISTS idx_cards_assignee ON cards(assignee_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_cards_reporter ON cards(reporter_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_subtasks_card ON subtasks(card_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_cards_parent ON cards(parent_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_comments_card ON comments(card_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read)`,
 		`CREATE INDEX IF NOT EXISTS idx_activity_card ON activity_log(card_id)`,

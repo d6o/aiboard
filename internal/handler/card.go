@@ -10,7 +10,7 @@ import (
 type cardService interface {
 	List(filter model.CardFilter) ([]model.Card, error)
 	Get(id string) (model.Card, error)
-	Create(title, description string, priority int, col model.Column, reporterID, assigneeID, actingUserID string) (model.Card, error)
+	Create(title, description string, priority int, col model.Column, reporterID, assigneeID, parentID, actingUserID string) (model.Card, error)
 	Update(id, title, description string, priority int, col model.Column, sortOrder int, reporterID, assigneeID, actingUserID string) (model.Card, error)
 	Move(id string, col model.Column, actingUserID string) (model.Card, error)
 	Delete(id, actingUserID string) error
@@ -34,6 +34,7 @@ func (h *CardHandler) List(w http.ResponseWriter, r *http.Request) {
 		Reporter: q.Get("reporter_id"),
 		Tag:      q.Get("tag_id"),
 		Priority: priority,
+		ParentID: q.Get("parent_id"),
 	}
 
 	cards, err := h.svc.List(filter)
@@ -64,6 +65,7 @@ func (h *CardHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Column      model.Column `json:"column"`
 		ReporterID  string       `json:"reporter_id"`
 		AssigneeID  string       `json:"assignee_id"`
+		ParentID    string       `json:"parent_id"`
 		UserID      string       `json:"user_id"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
@@ -76,7 +78,7 @@ func (h *CardHandler) Create(w http.ResponseWriter, r *http.Request) {
 		actingUser = req.ReporterID
 	}
 
-	card, err := h.svc.Create(req.Title, req.Description, req.Priority, req.Column, req.ReporterID, req.AssigneeID, actingUser)
+	card, err := h.svc.Create(req.Title, req.Description, req.Priority, req.Column, req.ReporterID, req.AssigneeID, req.ParentID, actingUser)
 	if err != nil {
 		h.rw.HandleError(w, err)
 		return

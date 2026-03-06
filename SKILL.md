@@ -41,13 +41,13 @@ The base URL defaults to `http://localhost:8080`. Override it by setting the `AI
 
 Here are the kinds of requests a user might make, and how you should handle them:
 
-**"Show me what's on the board"** — Fetch all cards with `GET /api/cards` and summarize them grouped by column. Mention the card count per column, highlight high-priority items, and flag any cards where all subtasks are done but the card has not moved to Done yet.
+**"Show me what's on the board"** — Fetch all cards with `GET /api/cards` and summarize them grouped by column. Mention the card count per column, highlight high-priority items, and flag any cards where all child cards are done but the parent has not moved to Done yet.
 
 **"Create a card for implementing dark mode"** — Call `POST /api/cards` with the title, a sensible priority, column set to `todo`, and both reporter and assignee set to the current user unless the user specifies otherwise. Always include an `Idempotency-Key` header when creating resources.
 
 **"Move the auth refactor card to done"** — First search for the card by listing cards and matching the title. Then call `PATCH /api/cards/{id}/move` with `column: done`. Tell the user that moving to Done will notify the reporter.
 
-**"Break down the API migration into subtasks"** — Find the card, then make multiple `POST /api/cards/{card_id}/subtasks` calls, one per subtask. Keep titles concise and distinct. Remember the limit is 20 subtasks per card.
+**"Break down the API migration into subtasks"** — Find the card, then create child cards with `POST /api/cards` setting `parent_id` to the parent card's ID. Each child card is a full card with its own assignee, priority, and column. You can assign different team members to each child.
 
 **"What happened on the board today"** — Query the activity log with `GET /api/activity` and summarize recent actions. Group by card if that makes the output clearer.
 
@@ -73,11 +73,11 @@ To delete a user, call `DELETE /api/users/{id}`. This fails with `USER_IN_USE` i
 
 ### Cards
 
-Cards are the core unit of work. Each card has a title, optional description, priority from 1 (highest) to 5 (lowest), a column, a reporter, an assignee, and optional tags, subtasks, and comments.
+Cards are the core unit of work. Each card has a title, optional description, priority from 1 (highest) to 5 (lowest), a column, a reporter, an assignee, an optional parent card, and optional tags, child cards, and comments.
 
-To list cards, call `GET /api/cards`. You can filter with query parameters that combine freely: `column`, `assignee_id`, `reporter_id`, `tag_id`, `priority`. For example, `GET /api/cards?column=doing&priority=1` returns only high-priority cards currently in progress.
+To list cards, call `GET /api/cards`. You can filter with query parameters that combine freely: `column`, `assignee_id`, `reporter_id`, `tag_id`, `priority`, `parent_id`. For example, `GET /api/cards?column=doing&priority=1` returns only high-priority cards currently in progress. Use `parent_id` to list children of a specific card.
 
-To get a single card with all its details including subtasks, comments, and tags, call `GET /api/cards/{id}`.
+To get a single card with all its details including children, comments, and tags, call `GET /api/cards/{id}`. The response includes `child_total` and `child_completed` counts, plus a `children` array with the child card objects.
 
 To create a card, `POST /api/cards` with this shape:
 
@@ -89,11 +89,12 @@ To create a card, `POST /api/cards` with this shape:
   "column": "todo",
   "reporter_id": "uuid",
   "assignee_id": "uuid",
+  "parent_id": "uuid (optional)",
   "user_id": "uuid"
 }
 ```
 
-Title, priority, column, reporter_id, and assignee_id are all required. The API rejects requests missing any of these. Description defaults to empty.
+Title, priority, column, reporter_id, and assignee_id are all required. The API rejects requests missing any of these. Description defaults to empty. Set `parent_id` to create a child card under another card. Child cards appear on the board like any other card and can have their own children (recursive nesting).
 
 To update a card, `PUT /api/cards/{id}` with all fields. This is a full replace. Always read the card first so you can preserve fields the user did not ask to change.
 
@@ -103,21 +104,7 @@ To delete a card, `DELETE /api/cards/{id}?user_id={user_id}`.
 
 When a card moves to Done, the system automatically notifies the card's reporter. This only fires on the transition into Done, not on further updates to a card already in Done.
 
-### Subtasks
-
-Subtasks are checklist items attached to a card. Each has a title and a completion state. A card can hold at most 20 subtasks, and no two subtasks on the same card can share a title (case-insensitive).
-
-List them with `GET /api/cards/{card_id}/subtasks`.
-
-Create one with `POST /api/cards/{card_id}/subtasks` passing `title` and `user_id`.
-
-Update one with `PUT /api/cards/{card_id}/subtasks/{id}` passing `title`, `completed`, and `user_id`. To toggle completion, read the current state first, flip the `completed` boolean, and send the update with the existing title.
-
-Delete one with `DELETE /api/cards/{card_id}/subtasks/{id}?user_id={user_id}`.
-
-Reorder them with `PATCH /api/cards/{card_id}/subtasks/reorder` passing an `ids` array in the desired order and `user_id`.
-
-When you mark the last incomplete subtask as complete, the system sends a notification to the card's assignee telling them all subtasks are done. This only fires when your specific update causes the incomplete count to reach zero.
+**Important constraint:** A parent card cannot move to Done until all of its child cards are in Done. Attempting to do so returns a `CHILDREN_NOT_DONE` error. When the last child card of a parent moves to Done, the system sends a notification to the parent card's assignee that all children are complete.
 
 ### Tags
 
@@ -142,7 +129,7 @@ When composing comments that mention users, always use the exact user name as it
 Notifications are messages delivered to a specific user. Three events create them:
 
 1. Someone mentions you with `@YourName` in a comment.
-2. All subtasks on a card assigned to you are marked complete.
+2. All child cards of a card assigned to you move to Done.
 3. A card you reported moves to the Done column.
 
 Fetch notifications with `GET /api/users/{user_id}/notifications`. Add `?unread=true` to see only unread ones.
@@ -155,15 +142,15 @@ Check notifications periodically when working on multi-step tasks. They tell you
 
 Every mutation on the board is recorded. Query it with `GET /api/activity`. Filter with `card_id`, `user_id`, or `action` query parameters. All filters are optional and combinable.
 
-Actions recorded: `created`, `updated`, `moved`, `deleted`, `attached`, `detached`, `reordered`.
+Actions recorded: `created`, `updated`, `moved`, `deleted`, `attached`, `detached`.
 
-Each entry includes what changed, which resource was affected, who did it, when, and a details string with context like "moved from todo to doing" or "subtask created: write tests".
+Each entry includes what changed, which resource was affected, who did it, when, and a details string with context like "moved from todo to doing" or "card created".
 
 Use the activity log to answer questions like "what did Bob do today" (`GET /api/activity?user_id={bob_id}`) or "what happened to this card" (`GET /api/activity?card_id={card_id}`).
 
 ### Board Reset
 
-To wipe all data and start fresh, call `POST /api/board/reset`. This truncates every table: users, cards, subtasks, tags, comments, notifications, activity log, and idempotency keys. The board will be completely empty afterward. Default tags are re-seeded on the next server restart but not immediately after reset.
+To wipe all data and start fresh, call `POST /api/board/reset`. This truncates every table: users, cards, tags, comments, notifications, activity log, and idempotency keys. The board will be completely empty afterward. Default tags are re-seeded on the next server restart but not immediately after reset.
 
 This is a destructive operation. Always confirm with the user before calling it. There is no undo.
 
@@ -171,7 +158,7 @@ This is a destructive operation. Always confirm with the user before calling it.
 
 All POST endpoints support an `Idempotency-Key` header. When you include this header and the server has already processed a request with that key, it returns the original response instead of creating a duplicate resource.
 
-Always include an idempotency key when creating cards, subtasks, comments, tags, or users. Use a descriptive key that ties to the logical operation, like `create-card-dark-mode-v1` or `add-subtask-{card_id}-write-tests`. This protects against accidental duplicates when retrying after network errors or timeouts.
+Always include an idempotency key when creating cards, comments, tags, or users. Use a descriptive key that ties to the logical operation, like `create-card-dark-mode-v1` or `create-child-{parent_id}-write-tests`. This protects against accidental duplicates when retrying after network errors or timeouts.
 
 ## Handling Errors
 
@@ -198,9 +185,7 @@ The error codes you will encounter and what to do about them:
 
 **DUPLICATE_NAME** — A user or tag with that name already exists. If creating a user, fetch the existing one instead. If creating a tag, find and use the existing tag.
 
-**DUPLICATE_SUBTASK_TITLE** — A subtask with that title already exists on this card. Subtask titles are unique per card, case-insensitive. Rephrase the title or check if the subtask already exists.
-
-**SUBTASK_LIMIT_EXCEEDED** — The card already has 20 subtasks. You cannot add more. Consider consolidating existing subtasks or splitting the card into multiple cards.
+**CHILDREN_NOT_DONE** — You tried to move a parent card to Done but some of its child cards are not in Done yet. List the children, move them to Done first, then retry.
 
 **TAG_ALREADY_ATTACHED** — The tag is already on this card. This is not a real failure. Tell the user the tag was already there and move on.
 
@@ -216,7 +201,7 @@ When searching for a card by title, always list cards first and do a case-insens
 
 When updating a card, read it first to get current values for any fields the user did not mention. The update endpoint is a full replace, so sending a blank description when the user only asked to change the priority would erase the existing description.
 
-When breaking work into subtasks, keep each title short, specific, and distinct. If the user asks for subtasks that would push past the 20 limit, warn them and suggest splitting the card.
+When breaking work into child cards, keep each title short, specific, and distinct. Assign different team members to child cards when the user mentions delegation. Child cards appear on the board alongside other cards.
 
 When the user asks to "finish" or "complete" a card, move it to Done rather than deleting it. Only delete cards when explicitly asked.
 
@@ -224,4 +209,4 @@ When posting comments on behalf of the user, write in a natural, professional to
 
 Prefer the move endpoint over update when only the column is changing. It produces cleaner activity log entries.
 
-When the user asks broad questions about project status, combine card listing, subtask counts, and activity log data to give a complete picture rather than dumping raw API responses.
+When the user asks broad questions about project status, combine card listing, child card progress, and activity log data to give a complete picture rather than dumping raw API responses.
