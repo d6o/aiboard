@@ -13,13 +13,14 @@ type Server struct {
 	mux *http.ServeMux
 }
 
-func NewServer(db *sql.DB) *Server {
+func NewServer(db *sql.DB, uploadDir string) *Server {
 	userStore := store.NewUserStore(db)
 	cardStore := store.NewCardStore(db)
 	tagStore := store.NewTagStore(db)
 	commentStore := store.NewCommentStore(db)
 	notifStore := store.NewNotificationStore(db)
 	activityStore := store.NewActivityStore(db)
+	fileStore := store.NewFileStore(db)
 	boardStore := store.NewBoardStore(db)
 	idempotencyStore := store.NewIdempotencyStore(db)
 
@@ -29,6 +30,7 @@ func NewServer(db *sql.DB) *Server {
 	commentSvc := service.NewCommentService(commentStore, userStore, notifStore, cardStore, activityStore)
 	notifSvc := service.NewNotificationService(notifStore)
 	activitySvc := service.NewActivityService(activityStore)
+	fileSvc := service.NewFileService(fileStore, cardStore, activityStore, uploadDir)
 	boardSvc := service.NewBoardService(boardStore)
 
 	userH := handler.NewUserHandler(userSvc)
@@ -37,6 +39,7 @@ func NewServer(db *sql.DB) *Server {
 	commentH := handler.NewCommentHandler(commentSvc)
 	notifH := handler.NewNotificationHandler(notifSvc)
 	activityH := handler.NewActivityHandler(activitySvc)
+	fileH := handler.NewFileHandler(fileSvc)
 	boardH := handler.NewBoardHandler(boardSvc)
 	idempotency := handler.NewIdempotencyMiddleware(idempotencyStore)
 
@@ -67,6 +70,13 @@ func NewServer(db *sql.DB) *Server {
 	mux.HandleFunc("GET /api/cards/{cardID}/comments", commentH.List)
 	mux.HandleFunc("POST /api/cards/{cardID}/comments", idempotency.Wrap(commentH.Create))
 	mux.HandleFunc("DELETE /api/cards/{cardID}/comments/{id}", commentH.Delete)
+
+	// Files
+	mux.HandleFunc("GET /api/cards/{cardID}/files", fileH.List)
+	mux.HandleFunc("POST /api/cards/{cardID}/files", fileH.Upload)
+	mux.HandleFunc("GET /api/files/{id}", fileH.Get)
+	mux.HandleFunc("GET /api/files/{id}/raw", fileH.Raw)
+	mux.HandleFunc("DELETE /api/files/{id}", fileH.Delete)
 
 	// Notifications
 	mux.HandleFunc("GET /api/users/{userID}/notifications", notifH.List)

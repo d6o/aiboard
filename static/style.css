@@ -473,6 +473,46 @@ header h1 {
     font-size: 13px;
 }
 
+/* Files */
+.file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 13px;
+}
+
+.file-link {
+    flex: 1;
+    color: #3b82f6;
+    text-decoration: none;
+    word-break: break-all;
+}
+
+.file-link:hover {
+    text-decoration: underline;
+}
+
+.file-size {
+    font-size: 11px;
+    color: #999;
+    white-space: nowrap;
+}
+
+.delete-file {
+    cursor: pointer;
+    color: #ccc;
+    font-size: 16px;
+}
+
+.delete-file:hover {
+    color: #ef4444;
+}
+
+.file-upload {
+    margin-top: 8px;
+}
+
 /* Comments */
 .comment-item {
     padding: 8px 0;

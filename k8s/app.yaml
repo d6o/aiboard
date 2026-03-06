@@ -46,6 +46,11 @@ spec:
               value: "postgres://aiboard:aiboard@postgres.aiboard.svc.cluster.local:5432/aiboard?sslmode=disable"
             - name: PORT
               value: "8080"
+            - name: UPLOAD_DIR
+              value: "/data/uploads"
+          volumeMounts:
+            - name: uploads
+              mountPath: /data/uploads
           readinessProbe:
             httpGet:
               path: /api/users
@@ -65,3 +70,19 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: aiboard-uploads
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: aiboard-uploads
+  namespace: aiboard
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

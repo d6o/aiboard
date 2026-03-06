@@ -22,9 +22,13 @@ services:
     environment:
       DATABASE_URL: "postgres://aiboard:aiboard@db:5432/aiboard?sslmode=disable"
       PORT: "8080"
+      UPLOAD_DIR: "/data/uploads"
+    volumes:
+      - uploads:/data/uploads
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   pgdata:
+  uploads:

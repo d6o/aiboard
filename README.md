@@ -76,6 +76,16 @@ All endpoints return JSON with this structure:
 | POST | `/api/cards/{cardID}/tags` | Attach a tag to a card |
 | DELETE | `/api/cards/{cardID}/tags/{tagID}` | Detach a tag from a card |
 
+### Files
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/cards/{cardID}/files` | List files attached to a card |
+| POST | `/api/cards/{cardID}/files` | Upload a file (multipart, field: `file`, max 10 MB) |
+| GET | `/api/files/{id}` | Get file metadata |
+| GET | `/api/files/{id}/raw` | View/download the raw file (opens in browser for text, images, PDFs) |
+| DELETE | `/api/files/{id}` | Delete a file |
+
 ### Comments
 
 | Method | Endpoint | Description |
@@ -145,6 +155,16 @@ curl -X PATCH http://localhost:8080/api/cards/<card-id>/move \
   -H "Content-Type: application/json" \
   -d '{"column": "done", "user_id": "<user-id>"}'
 ```
+
+**Upload a file to a card:**
+
+```bash
+curl -X POST http://localhost:8080/api/cards/<card-id>/files \
+  -F "file=@notes.txt" \
+  -F "user_id=<user-id>"
+```
+
+The response includes a `raw_url` field (e.g. `/api/files/<id>/raw`) that opens the file directly in the browser.
 
 **Post a comment with @mention:**
 
@@ -271,6 +291,7 @@ Each layer depends on the one below it through interfaces defined at the consume
 |----------|---------|-------------|
 | `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/aiboard?sslmode=disable` | PostgreSQL connection string |
 | `PORT` | `8080` | HTTP server port |
+| `UPLOAD_DIR` | `uploads` | Directory for uploaded files |
 
 ## Seed Data
 

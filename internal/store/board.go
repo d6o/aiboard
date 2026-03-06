@@ -16,6 +16,7 @@ func (s *BoardStore) Reset() error {
 		activity_log,
 		notifications,
 		comments,
+		files,
 		card_tags,
 		cards,
 		tags,

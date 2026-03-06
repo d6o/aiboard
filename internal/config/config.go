@@ -5,6 +5,7 @@ import "os"
 type Config struct {
 	DatabaseURL string
 	Port        string
+	UploadDir   string
 }
 
 func NewConfig() Config {
@@ -18,8 +19,14 @@ func NewConfig() Config {
 		port = "8080"
 	}
 
+	uploadDir := os.Getenv("UPLOAD_DIR")
+	if uploadDir == "" {
+		uploadDir = "uploads"
+	}
+
 	return Config{
 		DatabaseURL: dbURL,
 		Port:        port,
+		UploadDir:   uploadDir,
 	}
 }

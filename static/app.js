@@ -210,6 +210,7 @@
         $("#delete-card-btn").style.display = "inline-block";
         renderTags(card.tags || []);
         renderChildren(card.children || [], card.child_total, card.child_completed);
+        loadFiles(card.id);
         renderComments(card.comments || []);
         openModal();
     }
@@ -325,6 +326,63 @@
         });
         await openCardDetail(editingCardID);
         await loadBoard();
+    });
+
+    // Files
+    async function loadFiles(cardID) {
+        const res = await fetch("/api/cards/" + cardID + "/files");
+        const data = await res.json();
+        const files = data.data || [];
+        renderFiles(files);
+    }
+
+    function renderFiles(files) {
+        const container = $("#file-list");
+        container.innerHTML = "";
+        $("#file-count").textContent = files.length > 0 ? `(${files.length})` : "";
+
+        for (const f of files) {
+            const item = document.createElement("div");
+            item.className = "file-item";
+            const sizeStr = f.size < 1024 ? f.size + " B"
+                : f.size < 1048576 ? (f.size / 1024).toFixed(1) + " KB"
+                : (f.size / 1048576).toFixed(1) + " MB";
+            item.innerHTML = `
+                <a href="${f.raw_url}" target="_blank" class="file-link">${escapeHTML(f.filename)}</a>
+                <span class="file-size">${sizeStr}</span>
+                <span class="delete-file" data-id="${f.id}">&times;</span>
+            `;
+            container.appendChild(item);
+        }
+
+        container.querySelectorAll(".delete-file").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+                await fetch("/api/files/" + btn.dataset.id + "?user_id=" + currentUserID, { method: "DELETE" });
+                await loadFiles(editingCardID);
+            });
+        });
+    }
+
+    $("#upload-file-btn").addEventListener("click", () => {
+        $("#file-input").click();
+    });
+
+    $("#file-input").addEventListener("change", async () => {
+        const input = $("#file-input");
+        if (!input.files.length) return;
+        const formData = new FormData();
+        formData.append("file", input.files[0]);
+        formData.append("user_id", currentUserID);
+        const res = await fetch("/api/cards/" + editingCardID + "/files", {
+            method: "POST",
+            body: formData,
+        });
+        const data = await res.json();
+        if (data.error) {
+            showError(data.error.message);
+        }
+        input.value = "";
+        await loadFiles(editingCardID);
     });
 
     // Comments

@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/d6o/aiboard/internal/config"
 	"github.com/d6o/aiboard/internal/database"
@@ -28,7 +29,11 @@ func main() {
 		log.Fatal("failed to seed database: ", err)
 	}
 
-	srv := server.NewServer(conn.DB)
+	if err := os.MkdirAll(cfg.UploadDir, 0o755); err != nil {
+		log.Fatal("failed to create upload directory: ", err)
+	}
+
+	srv := server.NewServer(conn.DB, cfg.UploadDir)
 
 	log.Println("AIBoard server starting on :" + cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, srv); err != nil {

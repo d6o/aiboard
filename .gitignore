@@ -21,6 +21,9 @@ aiboard
 .DS_Store
 Thumbs.db
 
+# Uploads
+uploads/
+
 # Environment
 .env
 .env.*

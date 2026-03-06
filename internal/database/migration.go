@@ -68,6 +68,14 @@ func (m *Migrator) Run() error {
 			card_id UUID REFERENCES cards(id) ON DELETE SET NULL,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
+		`CREATE TABLE IF NOT EXISTS files (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			card_id UUID NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+			filename TEXT NOT NULL,
+			content_type TEXT NOT NULL,
+			size BIGINT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
 		`CREATE TABLE IF NOT EXISTS idempotency_keys (
 			key TEXT PRIMARY KEY,
 			response_status INTEGER NOT NULL,
@@ -79,6 +87,7 @@ func (m *Migrator) Run() error {
 		`CREATE INDEX IF NOT EXISTS idx_cards_reporter ON cards(reporter_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_cards_parent ON cards(parent_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_comments_card ON comments(card_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_files_card ON files(card_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read)`,
 		`CREATE INDEX IF NOT EXISTS idx_activity_card ON activity_log(card_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_log(user_id)`,

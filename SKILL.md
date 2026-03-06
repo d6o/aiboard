@@ -119,6 +119,14 @@ Attach a tag to a card with `POST /api/cards/{card_id}/tags` passing `tag_id` an
 
 Tag names must be unique. Attaching a tag that is already on a card returns a `TAG_ALREADY_ATTACHED` error. Handle it gracefully by telling the user the tag is already there rather than reporting a failure.
 
+### Files
+
+You can attach files to any card. Upload with a multipart POST: `curl -X POST "${AIBOARD_URL}/api/cards/{card_id}/files" -F "file=@path/to/file" -F "user_id={user_id}"`. Maximum file size is 10 MB.
+
+List files on a card with `GET /api/cards/{card_id}/files`. Each file in the response includes a `raw_url` field (e.g. `/api/files/{id}/raw`) that serves the file directly — text files, images, and PDFs render in the browser. Use this URL when sharing file links with the user.
+
+Get file metadata with `GET /api/files/{id}`. Delete a file with `DELETE /api/files/{id}?user_id={user_id}`.
+
 ### Comments and Mentions
 
 Comments are text entries on a card. List them with `GET /api/cards/{card_id}/comments`. Create one with `POST /api/cards/{card_id}/comments` passing `content` and `user_id`. Delete one with `DELETE /api/cards/{card_id}/comments/{id}?user_id={user_id}`.
@@ -145,7 +153,7 @@ Check notifications periodically when working on multi-step tasks. They tell you
 
 Every mutation on the board is recorded. Query it with `GET /api/activity`. Filter with `card_id`, `user_id`, or `action` query parameters. All filters are optional and combinable.
 
-Actions recorded: `created`, `updated`, `moved`, `deleted`, `attached`, `detached`.
+Actions recorded: `created`, `updated`, `moved`, `deleted`, `attached`, `detached`, `uploaded`.
 
 Each entry includes what changed, which resource was affected, who did it, when, and a details string with context like "moved from todo to doing" or "card created".
 
