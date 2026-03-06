@@ -1,20 +1,23 @@
 ---
-metadata.openclaw:
-  emoji: "\U0001F4CB"
-  requires:
-    bins:
-      - curl
-    env:
-      - AIBOARD_URL
-    config:
-      - aiboard_user_id
-  install: |
-    echo "Verify AIBoard is reachable..."
-    curl -sf "${AIBOARD_URL:-http://localhost:8080}/api/users" > /dev/null || {
-      echo "AIBoard is not running. Start it with: make run"
-      exit 1
-    }
-    echo "AIBoard connection verified."
+name: aiboard
+description: Use when the user asks you to manage tasks, track work items, update project status, coordinate with teammates, break down features into subtasks, or interact with a kanban board on AIBoard.
+metadata:
+  openclaw:
+    emoji: "\U0001F4CB"
+    requires:
+      bins:
+        - curl
+      env:
+        - AIBOARD_URL
+      config:
+        - aiboard_user_id
+    install: |
+      echo "Verify AIBoard is reachable..."
+      curl -sf "${AIBOARD_URL:-http://localhost:8080}/api/users" > /dev/null || {
+        echo "AIBoard is not running. Start it with: make run"
+        exit 1
+      }
+      echo "AIBoard connection verified."
 ---
 
 # AIBoard
