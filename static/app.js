@@ -44,7 +44,9 @@
         populateUserSelectors();
         await loadBoard();
         pollNotifications();
+        pollChatUnread();
         setInterval(pollNotifications, 30000);
+        setInterval(pollChatUnread, 15000);
     }
 
     function showCreateUserPrompt() {
@@ -61,7 +63,9 @@
             populateUserSelectors();
             loadBoard();
             pollNotifications();
+            pollChatUnread();
             setInterval(pollNotifications, 30000);
+            setInterval(pollChatUnread, 15000);
         });
     }
 
@@ -81,6 +85,7 @@
         $("#current-user").addEventListener("change", (e) => {
             currentUserID = e.target.value;
             pollNotifications();
+            pollChatUnread();
         });
     }
 
@@ -467,6 +472,138 @@
         });
         commentInput.value = "";
         await openCardDetail(editingCardID);
+    });
+
+    // Chat
+    let chatOpen = false;
+
+    $("#chat-toggle").addEventListener("click", async (e) => {
+        e.stopPropagation();
+        chatOpen = !chatOpen;
+        const panel = $("#chat-panel");
+        if (chatOpen) {
+            panel.classList.add("open");
+            await loadChatMessages();
+            await markChatRead();
+            scrollChatBottom();
+        } else {
+            panel.classList.remove("open");
+        }
+    });
+
+    $("#chat-close").addEventListener("click", () => {
+        chatOpen = false;
+        $("#chat-panel").classList.remove("open");
+    });
+
+    async function loadChatMessages() {
+        const messages = await api("GET", "/messages?limit=50");
+        const container = $("#chat-messages");
+        container.innerHTML = "";
+        const ordered = messages.reverse();
+        for (const m of ordered) {
+            container.appendChild(renderChatMessage(m));
+        }
+    }
+
+    function renderChatMessage(m) {
+        const user = m.user || {};
+        const initial = (user.name || "?")[0].toUpperCase();
+        const el = document.createElement("div");
+        el.className = "chat-msg";
+        el.innerHTML = `
+            <span class="avatar" style="background:${user.avatar_color || '#666'};width:28px;height:28px;font-size:12px;flex-shrink:0">${initial}</span>
+            <div class="chat-msg-body">
+                <div class="chat-msg-header">
+                    <span class="chat-msg-author">${escapeHTML(user.name || "Unknown")}</span>
+                    <span class="chat-msg-time">${formatTime(m.created_at)}</span>
+                </div>
+                <div class="chat-msg-content">${formatMentions(escapeHTML(m.content))}</div>
+            </div>
+        `;
+        return el;
+    }
+
+    function scrollChatBottom() {
+        const container = $("#chat-messages");
+        container.scrollTop = container.scrollHeight;
+    }
+
+    async function markChatRead() {
+        await api("PATCH", "/messages/mark-read", { user_id: currentUserID });
+        pollChatUnread();
+    }
+
+    async function pollChatUnread() {
+        if (!currentUserID) return;
+        const res = await api("GET", `/messages/unread-count?user_id=${currentUserID}`);
+        const badge = $("#chat-badge");
+        if (res.unread_count > 0) {
+            badge.textContent = res.unread_count;
+            badge.style.display = "inline";
+        } else {
+            badge.style.display = "none";
+        }
+    }
+
+    // Chat @mention autocomplete
+    const chatInput = $("#chat-input-text");
+    const chatMentionDropdown = $("#chat-mention-dropdown");
+
+    chatInput.addEventListener("input", () => {
+        const val = chatInput.value;
+        const cursor = chatInput.selectionStart;
+        const before = val.substring(0, cursor);
+        const match = before.match(/@(\w*)$/);
+
+        if (match) {
+            const query = match[1].toLowerCase();
+            const filtered = users.filter((u) =>
+                u.name.toLowerCase().startsWith(query)
+            );
+            if (filtered.length > 0) {
+                chatMentionDropdown.innerHTML = "";
+                for (const u of filtered) {
+                    const opt = document.createElement("div");
+                    opt.className = "mention-option";
+                    opt.innerHTML = `<span class="avatar" style="background:${u.avatar_color};width:20px;height:20px;font-size:10px">${u.name[0]}</span> ${escapeHTML(u.name)}`;
+                    opt.addEventListener("mousedown", (e) => {
+                        e.preventDefault();
+                        const prefix = before.substring(0, before.length - match[0].length);
+                        const suffix = val.substring(cursor);
+                        chatInput.value = prefix + "@" + u.name + " " + suffix;
+                        chatMentionDropdown.style.display = "none";
+                    });
+                    chatMentionDropdown.appendChild(opt);
+                }
+                chatMentionDropdown.style.display = "block";
+                return;
+            }
+        }
+        chatMentionDropdown.style.display = "none";
+    });
+
+    chatInput.addEventListener("blur", () => {
+        setTimeout(() => { chatMentionDropdown.style.display = "none"; }, 200);
+    });
+
+    $("#chat-send-btn").addEventListener("click", async () => {
+        const content = chatInput.value.trim();
+        if (!content) return;
+        await api("POST", "/messages", {
+            content,
+            user_id: currentUserID,
+        });
+        chatInput.value = "";
+        await loadChatMessages();
+        scrollChatBottom();
+    });
+
+    chatInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            $("#chat-send-btn").click();
+        }
     });
 
     // Notifications

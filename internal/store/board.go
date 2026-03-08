@@ -13,6 +13,8 @@ func NewBoardStore(db *sql.DB) *BoardStore {
 func (s *BoardStore) Reset() error {
 	_, err := s.db.Exec(`TRUNCATE
 		idempotency_keys,
+		message_reads,
+		messages,
 		activity_log,
 		notifications,
 		comments,

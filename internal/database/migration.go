@@ -76,6 +76,16 @@ func (m *Migrator) Run() error {
 			size BIGINT NOT NULL,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
+		`CREATE TABLE IF NOT EXISTS messages (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id UUID NOT NULL REFERENCES users(id),
+			content TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS message_reads (
+			user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+			last_read_at TIMESTAMPTZ NOT NULL
+		)`,
 		`CREATE TABLE IF NOT EXISTS idempotency_keys (
 			key TEXT PRIMARY KEY,
 			response_status INTEGER NOT NULL,
@@ -88,6 +98,7 @@ func (m *Migrator) Run() error {
 		`CREATE INDEX IF NOT EXISTS idx_cards_parent ON cards(parent_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_comments_card ON comments(card_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_files_card ON files(card_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read)`,
 		`CREATE INDEX IF NOT EXISTS idx_activity_card ON activity_log(card_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_log(user_id)`,

@@ -102,6 +102,16 @@ All endpoints return JSON with this structure:
 | PATCH | `/api/users/{userID}/notifications/{id}/read` | Mark one as read |
 | PATCH | `/api/users/{userID}/notifications/read-all` | Mark all as read |
 
+### Chat Messages
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/messages` | List messages (query: `limit`, `before` for cursor pagination) |
+| POST | `/api/messages` | Send a message (parses @mentions, notifies tagged users) |
+| DELETE | `/api/messages/{id}` | Delete a message |
+| GET | `/api/messages/unread-count?user_id={id}` | Get unread message count for a user |
+| PATCH | `/api/messages/mark-read` | Mark all messages as read for a user |
+
 ### Activity Log
 
 | Method | Endpoint | Description |

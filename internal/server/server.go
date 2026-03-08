@@ -21,6 +21,7 @@ func NewServer(db *sql.DB, uploadDir string) *Server {
 	notifStore := store.NewNotificationStore(db)
 	activityStore := store.NewActivityStore(db)
 	fileStore := store.NewFileStore(db)
+	messageStore := store.NewMessageStore(db)
 	boardStore := store.NewBoardStore(db)
 	idempotencyStore := store.NewIdempotencyStore(db)
 
@@ -31,6 +32,7 @@ func NewServer(db *sql.DB, uploadDir string) *Server {
 	notifSvc := service.NewNotificationService(notifStore)
 	activitySvc := service.NewActivityService(activityStore)
 	fileSvc := service.NewFileService(fileStore, cardStore, activityStore, commentStore, uploadDir)
+	messageSvc := service.NewMessageService(messageStore, userStore, notifStore)
 	boardSvc := service.NewBoardService(boardStore)
 
 	userH := handler.NewUserHandler(userSvc)
@@ -40,6 +42,7 @@ func NewServer(db *sql.DB, uploadDir string) *Server {
 	notifH := handler.NewNotificationHandler(notifSvc)
 	activityH := handler.NewActivityHandler(activitySvc)
 	fileH := handler.NewFileHandler(fileSvc)
+	messageH := handler.NewMessageHandler(messageSvc)
 	boardH := handler.NewBoardHandler(boardSvc)
 	idempotency := handler.NewIdempotencyMiddleware(idempotencyStore)
 
@@ -77,6 +80,13 @@ func NewServer(db *sql.DB, uploadDir string) *Server {
 	mux.HandleFunc("GET /api/files/{id}", fileH.Get)
 	mux.HandleFunc("GET /api/files/{id}/raw", fileH.Raw)
 	mux.HandleFunc("DELETE /api/files/{id}", fileH.Delete)
+
+	// Chat messages
+	mux.HandleFunc("GET /api/messages", messageH.List)
+	mux.HandleFunc("POST /api/messages", idempotency.Wrap(messageH.Create))
+	mux.HandleFunc("DELETE /api/messages/{id}", messageH.Delete)
+	mux.HandleFunc("GET /api/messages/unread-count", messageH.UnreadCount)
+	mux.HandleFunc("PATCH /api/messages/mark-read", messageH.MarkRead)
 
 	// Notifications
 	mux.HandleFunc("GET /api/users/{userID}/notifications", notifH.List)
