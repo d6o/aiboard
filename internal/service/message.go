@@ -1,7 +1,6 @@
 package service
 
 import (
-	"regexp"
 	"strings"
 
 	"github.com/d6o/aiboard/internal/model"
@@ -79,23 +78,16 @@ func (s *MessageService) MarkRead(userID string) error {
 }
 
 func (s *MessageService) processMentions(content, authorID string) {
-	mentionRe := regexp.MustCompile(`@(\w+)`)
-	matches := mentionRe.FindAllStringSubmatch(content, -1)
-	if len(matches) == 0 {
-		return
-	}
-
 	allUsers, err := s.users.FindAll()
 	if err != nil {
 		return
 	}
 
-	userMap := make(map[string]model.User, len(allUsers))
-	for _, u := range allUsers {
-		userMap[strings.ToLower(u.Name)] = u
+	mentioned := matchMentionedUsers(content, allUsers, authorID)
+	if len(mentioned) == 0 {
+		return
 	}
 
-	// Find author name for the notification message
 	authorName := "Someone"
 	for _, u := range allUsers {
 		if u.ID == authorID {
@@ -109,14 +101,7 @@ func (s *MessageService) processMentions(content, authorID string) {
 		preview = preview[:100] + "..."
 	}
 
-	notified := make(map[string]bool)
-	for _, match := range matches {
-		name := strings.ToLower(match[1])
-		u, ok := userMap[name]
-		if !ok || u.ID == authorID || notified[u.ID] {
-			continue
-		}
-		notified[u.ID] = true
+	for _, u := range mentioned {
 		msg := authorName + " mentioned you in chat: " + preview
 		s.notifs.Create(u.ID, msg, "")
 	}

@@ -1,7 +1,6 @@
 package service
 
 import (
-	"regexp"
 	"strings"
 
 	"github.com/d6o/aiboard/internal/model"
@@ -91,36 +90,23 @@ func (s *CommentService) Delete(id, actingUserID string) error {
 }
 
 func (s *CommentService) processMentions(content, authorID, cardID string) {
-	mentionRe := regexp.MustCompile(`@(\w+)`)
-	matches := mentionRe.FindAllStringSubmatch(content, -1)
-	if len(matches) == 0 {
-		return
-	}
-
 	users, err := s.users.FindAll()
 	if err != nil {
 		return
 	}
 
-	userMap := make(map[string]model.User, len(users))
-	for _, u := range users {
-		userMap[strings.ToLower(u.Name)] = u
+	mentioned := matchMentionedUsers(content, users, authorID)
+	if len(mentioned) == 0 {
+		return
 	}
 
-	notified := make(map[string]bool)
 	card, _ := s.cards.FindByID(cardID)
 	preview := content
 	if len(preview) > 100 {
 		preview = preview[:100] + "..."
 	}
 
-	for _, match := range matches {
-		name := strings.ToLower(match[1])
-		u, ok := userMap[name]
-		if !ok || u.ID == authorID || notified[u.ID] {
-			continue
-		}
-		notified[u.ID] = true
+	for _, u := range mentioned {
 		msg := "You were mentioned in a comment on card \"" + card.Title + "\": " + preview
 		s.notifs.Create(u.ID, msg, cardID)
 	}

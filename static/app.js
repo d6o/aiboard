@@ -419,7 +419,7 @@
     }
 
     function formatMentions(text) {
-        return text.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
+        return text.replace(/@([\w][\w-]*(?:\s[\w][\w-]*)?)/g, '<span class="mention">@$1</span>');
     }
 
     // Comment @mention autocomplete
@@ -430,12 +430,12 @@
         const val = commentInput.value;
         const cursor = commentInput.selectionStart;
         const before = val.substring(0, cursor);
-        const match = before.match(/@(\w*)$/);
+        const match = before.match(/@([\w-]*)$/);
 
         if (match) {
-            const query = match[1].toLowerCase();
+            const query = normalizeMention(match[1]);
             const filtered = users.filter((u) =>
-                u.name.toLowerCase().startsWith(query)
+                normalizeMention(u.name).startsWith(query)
             );
             if (filtered.length > 0) {
                 mentionDropdown.innerHTML = "";
@@ -554,12 +554,12 @@
         const val = chatInput.value;
         const cursor = chatInput.selectionStart;
         const before = val.substring(0, cursor);
-        const match = before.match(/@(\w*)$/);
+        const match = before.match(/@([\w-]*)$/);
 
         if (match) {
-            const query = match[1].toLowerCase();
+            const query = normalizeMention(match[1]);
             const filtered = users.filter((u) =>
-                u.name.toLowerCase().startsWith(query)
+                normalizeMention(u.name).startsWith(query)
             );
             if (filtered.length > 0) {
                 chatMentionDropdown.innerHTML = "";
@@ -667,6 +667,10 @@
     });
 
     // Helpers
+    function normalizeMention(str) {
+        return (str || "").toLowerCase().replace(/[-_ ]/g, "");
+    }
+
     function escapeHTML(str) {
         const div = document.createElement("div");
         div.textContent = str || "";
