@@ -76,6 +76,25 @@ func (m *Migrator) Run() error {
 			size BIGINT NOT NULL,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
+		`CREATE TABLE IF NOT EXISTS standup_config (
+			id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+			interval_hours INTEGER NOT NULL DEFAULT 24,
+			enabled BOOLEAN NOT NULL DEFAULT FALSE
+		)`,
+		`CREATE TABLE IF NOT EXISTS standups (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			number INTEGER NOT NULL UNIQUE,
+			start_time TIMESTAMPTZ NOT NULL,
+			end_time TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS standup_entries (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			standup_id UUID NOT NULL REFERENCES standups(id) ON DELETE CASCADE,
+			user_id UUID NOT NULL REFERENCES users(id),
+			content TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
 		`CREATE TABLE IF NOT EXISTS messages (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			user_id UUID NOT NULL REFERENCES users(id),
@@ -98,6 +117,7 @@ func (m *Migrator) Run() error {
 		`CREATE INDEX IF NOT EXISTS idx_cards_parent ON cards(parent_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_comments_card ON comments(card_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_files_card ON files(card_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_standup_entries_standup ON standup_entries(standup_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read)`,
 		`CREATE INDEX IF NOT EXISTS idx_activity_card ON activity_log(card_id)`,

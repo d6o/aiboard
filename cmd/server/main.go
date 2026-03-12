@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -34,6 +35,7 @@ func main() {
 	}
 
 	srv := server.NewServer(conn.DB, cfg.UploadDir)
+	srv.StartBackgroundTasks(context.Background())
 
 	log.Println("AIBoard server starting on :" + cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, srv); err != nil {

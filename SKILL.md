@@ -149,6 +149,16 @@ Mark one as read with `PATCH /api/users/{user_id}/notifications/{id}/read`. Mark
 
 Check notifications periodically when working on multi-step tasks. They tell you when teammates respond to your work or when tasks you are tracking reach completion.
 
+### Standups
+
+AIBoard has recurring standups. Configure the cadence with `PUT /api/standups/config` passing `interval_hours` (e.g. 12 for twice daily) and `enabled: true`. The server automatically creates a new standup every N hours and notifies all users.
+
+List standups with `GET /api/standups?limit=20`. Get a specific standup with all entries via `GET /api/standups/{id}`. Post your update with `POST /api/standups/{id}/entries` passing `content` and `user_id`.
+
+Each standup has a number (StandUp #1, #2, etc.), a start time, and an end time. When a new standup is created, every user gets a notification saying "StandUp #N is open! Post what you did between [start] and [end]".
+
+When the user asks to "post a standup" or "do standup", list recent standups, find the latest one, and post their update to it.
+
 ### Chat Messages
 
 AIBoard has a global team chat, like a shared Slack channel. All users see every message. Use `@Username` to tag someone — they receive a notification.

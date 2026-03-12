@@ -25,6 +25,9 @@
                     <div id="notification-list"></div>
                 </div>
             </div>
+            <div class="standup-toggle" id="standup-toggle" title="Standups">
+                <span class="standup-icon">&#9200;</span>
+            </div>
             <div class="chat-toggle" id="chat-toggle">
                 <span class="chat-icon">&#128172;</span>
                 <span class="badge" id="chat-badge" style="display:none">0</span>
@@ -47,6 +50,31 @@
             <div class="card-list" id="list-done"></div>
         </div>
     </main>
+
+    <div class="standup-panel" id="standup-panel">
+        <div class="chat-header">
+            <strong>Standups</strong>
+            <button class="modal-close" id="standup-close">&times;</button>
+        </div>
+        <div class="standup-config" id="standup-config">
+            <div class="standup-config-row">
+                <label>Every <input type="number" id="standup-interval" min="1" value="24" style="width:50px"> hours</label>
+                <label><input type="checkbox" id="standup-enabled"> Enabled</label>
+                <button class="btn btn-sm" id="standup-save-config">Save</button>
+            </div>
+        </div>
+        <div class="standup-list" id="standup-list"></div>
+        <div class="standup-detail" id="standup-detail" style="display:none">
+            <button class="btn btn-sm" id="standup-back">&larr; Back</button>
+            <h3 id="standup-detail-title"></h3>
+            <p id="standup-detail-period" style="font-size:12px;color:#888;margin:4px 0 12px"></p>
+            <div id="standup-entries"></div>
+            <div class="standup-post">
+                <textarea id="standup-entry-text" rows="3" placeholder="What did you work on?"></textarea>
+                <button class="btn btn-sm btn-primary" id="standup-post-btn">Post Update</button>
+            </div>
+        </div>
+    </div>
 
     <div class="chat-panel" id="chat-panel">
         <div class="chat-header">

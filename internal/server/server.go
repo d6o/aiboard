@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 
@@ -10,7 +11,8 @@ import (
 )
 
 type Server struct {
-	mux *http.ServeMux
+	mux       *http.ServeMux
+	standupSvc *service.StandupService
 }
 
 func NewServer(db *sql.DB, uploadDir string) *Server {
@@ -22,6 +24,7 @@ func NewServer(db *sql.DB, uploadDir string) *Server {
 	activityStore := store.NewActivityStore(db)
 	fileStore := store.NewFileStore(db)
 	messageStore := store.NewMessageStore(db)
+	standupStore := store.NewStandupStore(db)
 	boardStore := store.NewBoardStore(db)
 	idempotencyStore := store.NewIdempotencyStore(db)
 
@@ -33,6 +36,7 @@ func NewServer(db *sql.DB, uploadDir string) *Server {
 	activitySvc := service.NewActivityService(activityStore)
 	fileSvc := service.NewFileService(fileStore, cardStore, activityStore, commentStore, uploadDir)
 	messageSvc := service.NewMessageService(messageStore, userStore, notifStore)
+	standupSvc := service.NewStandupService(standupStore, userStore, notifStore)
 	boardSvc := service.NewBoardService(boardStore)
 
 	userH := handler.NewUserHandler(userSvc)
@@ -43,6 +47,7 @@ func NewServer(db *sql.DB, uploadDir string) *Server {
 	activityH := handler.NewActivityHandler(activitySvc)
 	fileH := handler.NewFileHandler(fileSvc)
 	messageH := handler.NewMessageHandler(messageSvc)
+	standupH := handler.NewStandupHandler(standupSvc)
 	boardH := handler.NewBoardHandler(boardSvc)
 	idempotency := handler.NewIdempotencyMiddleware(idempotencyStore)
 
@@ -88,6 +93,13 @@ func NewServer(db *sql.DB, uploadDir string) *Server {
 	mux.HandleFunc("GET /api/messages/unread-count", messageH.UnreadCount)
 	mux.HandleFunc("PATCH /api/messages/mark-read", messageH.MarkRead)
 
+	// Standups
+	mux.HandleFunc("GET /api/standups/config", standupH.GetConfig)
+	mux.HandleFunc("PUT /api/standups/config", standupH.UpdateConfig)
+	mux.HandleFunc("GET /api/standups", standupH.List)
+	mux.HandleFunc("GET /api/standups/{id}", standupH.Get)
+	mux.HandleFunc("POST /api/standups/{id}/entries", idempotency.Wrap(standupH.PostEntry))
+
 	// Notifications
 	mux.HandleFunc("GET /api/users/{userID}/notifications", notifH.List)
 	mux.HandleFunc("PATCH /api/users/{userID}/notifications/{id}/read", notifH.MarkRead)
@@ -102,7 +114,11 @@ func NewServer(db *sql.DB, uploadDir string) *Server {
 	// Static files
 	mux.Handle("GET /", http.FileServer(http.Dir("static")))
 
-	return &Server{mux: mux}
+	return &Server{mux: mux, standupSvc: standupSvc}
+}
+
+func (s *Server) StartBackgroundTasks(ctx context.Context) {
+	go s.standupSvc.RunTicker(ctx)
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

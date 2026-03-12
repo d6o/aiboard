@@ -102,6 +102,18 @@ All endpoints return JSON with this structure:
 | PATCH | `/api/users/{userID}/notifications/{id}/read` | Mark one as read |
 | PATCH | `/api/users/{userID}/notifications/read-all` | Mark all as read |
 
+### Standups
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/standups/config` | Get standup config (interval_hours, enabled) |
+| PUT | `/api/standups/config` | Update standup config |
+| GET | `/api/standups` | List standups (query: `limit`) |
+| GET | `/api/standups/{id}` | Get a standup with all entries |
+| POST | `/api/standups/{id}/entries` | Post a standup entry |
+
+When enabled, the server automatically creates a new standup every N hours and notifies all users to post their update.
+
 ### Chat Messages
 
 | Method | Endpoint | Description |

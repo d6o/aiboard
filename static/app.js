@@ -474,6 +474,124 @@
         await openCardDetail(editingCardID);
     });
 
+    // Standups
+    let standupOpen = false;
+    let viewingStandupID = null;
+
+    $("#standup-toggle").addEventListener("click", async (e) => {
+        e.stopPropagation();
+        standupOpen = !standupOpen;
+        const panel = $("#standup-panel");
+        if (standupOpen) {
+            panel.classList.add("open");
+            await loadStandupConfig();
+            await loadStandupList();
+            showStandupList();
+        } else {
+            panel.classList.remove("open");
+        }
+    });
+
+    $("#standup-close").addEventListener("click", () => {
+        standupOpen = false;
+        $("#standup-panel").classList.remove("open");
+    });
+
+    async function loadStandupConfig() {
+        const cfg = await api("GET", "/standups/config");
+        $("#standup-interval").value = cfg.interval_hours;
+        $("#standup-enabled").checked = cfg.enabled;
+    }
+
+    $("#standup-save-config").addEventListener("click", async () => {
+        await api("PUT", "/standups/config", {
+            interval_hours: parseInt($("#standup-interval").value) || 24,
+            enabled: $("#standup-enabled").checked,
+        });
+    });
+
+    async function loadStandupList() {
+        const standups = await api("GET", "/standups?limit=20");
+        const container = $("#standup-list");
+        container.innerHTML = "";
+        if (standups.length === 0) {
+            container.innerHTML = '<div style="padding:12px;color:#888;font-size:13px">No standups yet. Enable standups and set the cadence above.</div>';
+            return;
+        }
+        for (const st of standups) {
+            const item = document.createElement("div");
+            item.className = "standup-item";
+            const start = new Date(st.start_time).toLocaleString();
+            const end = new Date(st.end_time).toLocaleString();
+            item.innerHTML = `
+                <div class="standup-item-title">StandUp #${st.number}</div>
+                <div class="standup-item-period">${start} &mdash; ${end}</div>
+            `;
+            item.addEventListener("click", () => openStandupDetail(st.id));
+            container.appendChild(item);
+        }
+    }
+
+    function showStandupList() {
+        $("#standup-list").style.display = "block";
+        $("#standup-config").style.display = "block";
+        $("#standup-detail").style.display = "none";
+        viewingStandupID = null;
+    }
+
+    async function openStandupDetail(id) {
+        viewingStandupID = id;
+        const st = await api("GET", `/standups/${id}`);
+        $("#standup-list").style.display = "none";
+        $("#standup-config").style.display = "none";
+        $("#standup-detail").style.display = "block";
+        $("#standup-detail-title").textContent = "StandUp #" + st.number;
+        const start = new Date(st.start_time).toLocaleString();
+        const end = new Date(st.end_time).toLocaleString();
+        $("#standup-detail-period").textContent = start + " — " + end;
+
+        const container = $("#standup-entries");
+        container.innerHTML = "";
+        const entries = st.entries || [];
+        if (entries.length === 0) {
+            container.innerHTML = '<div style="padding:8px 0;color:#888;font-size:13px">No entries yet. Be the first to post!</div>';
+        }
+        for (const e of entries) {
+            const user = e.user || {};
+            const initial = (user.name || "?")[0].toUpperCase();
+            const el = document.createElement("div");
+            el.className = "standup-entry";
+            el.innerHTML = `
+                <span class="avatar" style="background:${user.avatar_color || '#666'};width:28px;height:28px;font-size:12px;flex-shrink:0">${initial}</span>
+                <div class="standup-entry-body">
+                    <div class="standup-entry-header">
+                        <span class="standup-entry-author">${escapeHTML(user.name || "Unknown")}</span>
+                        <span class="standup-entry-time">${formatTime(e.created_at)}</span>
+                    </div>
+                    <div class="standup-entry-content">${escapeHTML(e.content)}</div>
+                </div>
+            `;
+            container.appendChild(el);
+        }
+    }
+
+    $("#standup-back").addEventListener("click", () => {
+        showStandupList();
+        loadStandupList();
+    });
+
+    $("#standup-post-btn").addEventListener("click", async () => {
+        const textarea = $("#standup-entry-text");
+        const content = textarea.value.trim();
+        if (!content || !viewingStandupID) return;
+        await api("POST", `/standups/${viewingStandupID}/entries`, {
+            content,
+            user_id: currentUserID,
+        });
+        textarea.value = "";
+        await openStandupDetail(viewingStandupID);
+    });
+
     // Chat
     let chatOpen = false;
 
